@@ -1,0 +1,42 @@
+{
+    "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+    "version": 1,
+    "cli": { "analytics": false },
+    "projects": {
+        "minibank": {
+            "projectType": "application",
+            "root": "",
+            "sourceRoot": "src",
+            "architect": {
+                "build": {
+                    "builder": "@angular/build:application",
+                    "options": {
+                        "outputPath": "dist/minibank",
+                        "index": "src/index.html",
+                        "browser": "src/main.ts",
+                        "tsConfig": "tsconfig.app.json",
+                        "styles": ["src/styles.css"]
+                    },
+                    "configurations": {
+                        "production": {
+                            "optimization": {
+                                "scripts": true,
+                                "styles": { "minify": true, "inlineCritical": false },
+                                "fonts": false
+                            },
+                            "outputHashing": "all",
+                            "budgets": [
+                                {
+                                    "type": "initial",
+                                    "maximumWarning": "500kB",
+                                    "maximumError": "750kB"
+                                }
+                            ]
+                        }
+                    },
+                    "defaultConfiguration": "production"
+                }
+            }
+        }
+    }
+}

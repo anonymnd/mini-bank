@@ -1,0 +1,35 @@
+name: Build and verify MiniBank
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install compiler and SQLite development files
+        run: sudo apt-get update && sudo apt-get install -y gnucobol build-essential libsqlite3-dev
+      - name: Static analysis, build and integration tests
+        run: make check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Check, audit and build Angular
+        working-directory: frontend
+        run: |
+          npm run format:check
+          npm run typecheck
+          npm audit --audit-level=high
+          npm run build
+      - name: Install isolated test browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Verify real browser to COBOL journeys
+        working-directory: frontend
+        run: npm run test:e2e

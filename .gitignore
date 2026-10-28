@@ -1,0 +1,14 @@
+build/
+data/
+__pycache__/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/out-tsc/
+frontend/test-results/
+frontend/playwright-report/
+*.log
