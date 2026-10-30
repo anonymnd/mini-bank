@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 test('operator journey uses actual COBOL: review, cancel, post, retry, reverse, batch and reconcile', async ({
     page,
@@ -85,4 +86,47 @@ test('mobile navigation, empty search, validation and reduced-motion layout', as
             scroll: scrollX,
         })),
     ).toEqual({ document: 390, viewport: 390, scroll: 0 });
+});
+
+test('payment filters and CSV export match the visible register', async ({ page }) => {
+    const session = await page.request.get('/api/session');
+    const { token } = await session.json();
+    for (const [reference, amount] of [
+        ['FILTER-POSTED', '0.01'],
+        ['FILTER-REJECTED', '20000.00'],
+    ]) {
+        const response = await page.request.post('/api/transfers', {
+            headers: { 'X-MiniBank-Token': token },
+            data: { reference, source: 'ACC00001', destination: 'ACC00002', amount },
+        });
+        expect(response.status()).toBe(reference === 'FILTER-POSTED' ? 200 : 422);
+    }
+    await page.goto('/payments');
+    await page.getByLabel('Search payments').fill('filter-');
+    await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('REJECTED');
+    await expect(page.getByRole('row').filter({ hasText: 'FILTER-REJECTED' })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'FILTER-POSTED' })).toHaveCount(0);
+    await expect(page.getByText(/Showing 1 of/)).toBeVisible();
+    const downloadReady = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export CSV' }).click();
+    const download = await downloadReady;
+    expect(download.suggestedFilename()).toMatch(/^minibank-payments-\d{4}-\d{2}-\d{2}\.csv$/);
+    const path = await download.path();
+    expect(path).not.toBeNull();
+    const csv = await readFile(path!, 'utf8');
+    expect(csv).toContain('FILTER-REJECTED');
+    expect(csv).toContain('INSUFFICIENT_FUNDS');
+    expect(csv).not.toContain('FILTER-POSTED');
+    expect(csv.split('\r\n').filter(Boolean)).toHaveLength(2);
+    await page.getByLabel('Search payments').fill('does-not-exist');
+    await expect(page.getByText('No payments match your filters.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page.getByRole('row').filter({ hasText: 'FILTER-POSTED' })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'FILTER-REJECTED' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    ).toBeTruthy();
+    await page.screenshot({ path: 'test-results/payments-filters-mobile.png', fullPage: true });
 });

@@ -74,3 +74,12 @@ uncertain outcome. No CORS headers are emitted. Inquiry lists are bounded to
 A browser disconnect ends response delivery without retrying the operation.
 The operator must inspect/replay using the original payment reference or original
 batch file. Response loss never implies that a payment was rolled back.
+
+## Payment register search and export
+
+The register supports case-insensitive search by reference, account, rejection
+reason or reversal link, combined with Posted/Rejected status filters. Export CSV
+downloads exactly the filtered rows, preserving exact MAD decimals and UTC
+timestamps. Search and export cover the latest 100 loaded requests, not complete
+payment history. Formula-leading text is prefixed with an apostrophe to protect
+spreadsheet users. Filtering and export do not modify financial records.

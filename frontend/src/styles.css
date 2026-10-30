@@ -825,6 +825,32 @@ td strong {
     font-size: 11px;
     background: transparent;
 }
+.register-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px auto;
+    align-items: end;
+    gap: 16px;
+    padding: 20px 24px 0;
+}
+.register-filters .button {
+    min-height: 43px;
+}
+.register-count {
+    padding: 0 24px;
+    margin: 14px 0 18px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+@media (max-width: 600px) {
+    .register-filters {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 20px 17px 0;
+    }
+    .register-count {
+        padding: 0 17px;
+    }
+}
 .customer-name {
     display: flex;
     align-items: center;

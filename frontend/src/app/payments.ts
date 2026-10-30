@@ -1,8 +1,10 @@
-import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
+import { Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { BankApi, Payment, Result, message } from './api';
 import { Icon, MadPipe } from './shared';
+import { PaymentFilterStatus, filterPayments, paymentsCsv } from './payment-register';
 
 const reference = () => 'WEB-' + crypto.randomUUID().slice(0, 18).toUpperCase();
 
@@ -124,7 +126,44 @@ const reference = () => 'WEB-' + crypto.randomUUID().slice(0, 18).toUpperCase();
                     <h2>Payment register</h2>
                     <p>Latest 100 requests · posted payments and rejections</p>
                 </div>
+                <button
+                    class="button secondary small"
+                    (click)="exportPayments()"
+                    [disabled]="!filteredPayments().length || api.loading() || !!api.error()"
+                >
+                    Export CSV
+                </button>
             </div>
+            <div class="register-filters" [formGroup]="registerFilters">
+                <label class="register-search"
+                    >Search payments<input
+                        formControlName="query"
+                        placeholder="Reference, account or reason"
+                        type="search"
+                /></label>
+                <label
+                    >Status<select formControlName="status">
+                        <option value="ALL">All statuses</option>
+                        <option value="POSTED">Posted</option>
+                        <option value="REJECTED">Rejected</option>
+                    </select></label
+                >
+                <button
+                    class="button secondary small"
+                    (click)="clearFilters()"
+                    [disabled]="!filtersActive()"
+                >
+                    Clear filters
+                </button>
+            </div>
+            <p class="register-count" role="status" aria-live="polite">
+                Showing {{ filteredPayments().length }} of
+                {{ api.state()?.payments?.length ?? 0 }} loaded requests. Search and export cover
+                the latest 100 requests.
+            </p>
+            @if (exportMessage()) {
+                <p class="register-count" role="status">{{ exportMessage() }}</p>
+            }
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -137,7 +176,7 @@ const reference = () => 'WEB-' + crypto.randomUUID().slice(0, 18).toUpperCase();
                         </tr>
                     </thead>
                     <tbody>
-                        @for (payment of api.state()?.payments ?? []; track payment.reference) {
+                        @for (payment of filteredPayments(); track payment.reference) {
                             <tr>
                                 <td>
                                     <strong class="mono">{{ payment.reference }}</strong
@@ -192,7 +231,11 @@ const reference = () => 'WEB-' + crypto.randomUUID().slice(0, 18).toUpperCase();
                         } @empty {
                             <tr>
                                 <td colspan="5" class="empty">
-                                    Your first transfer will appear here.
+                                    {{
+                                        filtersActive()
+                                            ? 'No payments match your filters. Try another search or clear the filters.'
+                                            : 'Your first transfer will appear here.'
+                                    }}
                                 </td>
                             </tr>
                         }
@@ -275,6 +318,21 @@ export class Payments {
     readonly api = inject(BankApi);
     private readonly fb = inject(FormBuilder).nonNullable;
     private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+    readonly registerFilters = this.fb.group({ query: '', status: 'ALL' as PaymentFilterStatus });
+    private readonly filterValues = toSignal(this.registerFilters.valueChanges, {
+        initialValue: this.registerFilters.getRawValue(),
+    });
+    readonly filtersActive = computed(
+        () => !!this.filterValues().query?.trim() || this.filterValues().status !== 'ALL',
+    );
+    readonly filteredPayments = computed(() =>
+        filterPayments(
+            this.api.state()?.payments ?? [],
+            this.filterValues().query ?? '',
+            this.filterValues().status ?? 'ALL',
+        ),
+    );
+    readonly exportMessage = signal('');
     readonly form = this.fb.group({
         source: ['', [Validators.required]],
         destination: ['', [Validators.required]],
@@ -299,6 +357,30 @@ export class Payments {
     readonly submitted = signal(false);
     @ViewChild('transferDialog') transferDialog!: ElementRef<HTMLDialogElement>;
     @ViewChild('reversalDialog') reversalDialog!: ElementRef<HTMLDialogElement>;
+
+    clearFilters() {
+        this.registerFilters.setValue({ query: '', status: 'ALL' });
+        this.exportMessage.set('');
+    }
+    exportPayments() {
+        const rows = this.filteredPayments();
+        if (!rows.length || this.api.loading() || this.api.error()) return;
+        try {
+            const csv = paymentsCsv(rows);
+            const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `minibank-payments-${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+            // Let the browser begin reading the Blob before releasing its URL.
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            this.exportMessage.set(
+                `CSV download requested for ${rows.length} filtered payment${rows.length === 1 ? '' : 's'}.`,
+            );
+        } catch (error) {
+            this.error.set(message(error));
+        }
+    }
 
     sameAccount() {
         return (
